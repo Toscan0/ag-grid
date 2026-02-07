@@ -1446,6 +1446,11 @@
         .ag-rich-select-loading {
             display: flex;
             min-height: 2rem;
+
+            .ag-loading-text {
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
         }
     }
 
