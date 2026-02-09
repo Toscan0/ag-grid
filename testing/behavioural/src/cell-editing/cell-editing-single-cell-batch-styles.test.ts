@@ -152,7 +152,7 @@ describe('Cell Editing: single-cell batch styles', () => {
         expect(cellA0After).toHaveTextContent('A0');
     });
 
-    test('editing back to original value removes style; re-changing re-applies it', async () => {
+    test('editing back to original value removes style, re-changing re-applies it', async () => {
         const api = await createGrid();
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
@@ -201,7 +201,7 @@ describe('Cell Editing: single-cell batch styles', () => {
         expect(cellA0After).toHaveClass(/ag-cell-batch-edit/);
     });
 
-    test('pressing Escape cancels current cell edit without affecting other batch edits', async () => {
+    test('Escape cancels current cell edit without affecting other batch edits', async () => {
         const api = await createGrid();
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
@@ -243,7 +243,7 @@ describe('Cell Editing: single-cell batch styles', () => {
         expect(cellA0Still).toHaveClass(/ag-cell-batch-edit/);
     });
 
-    test('pressing Escape on a re-edited batch cell preserves the previous batch value', async () => {
+    test('Escape on a re-edited batch cell preserves the previous batch value', async () => {
         const api = await createGrid();
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
@@ -278,7 +278,7 @@ describe('Cell Editing: single-cell batch styles', () => {
         expect(cellA0Final).toHaveClass(/ag-cell-batch-edit/);
     });
 
-    test('clearing a batch-edited cell and typing original value back removes batch style', async () => {
+    test('clearing a batch-edited cell and typing original value removes batch style', async () => {
         const api = await createGrid();
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
@@ -315,7 +315,7 @@ describe('Cell Editing: single-cell batch styles', () => {
         expect(cellA0Final).not.toHaveClass(/ag-cell-batch-edit/);
     });
 
-    test('Delete toggles a cleared batch cell back to its original value', async () => {
+    test('Delete on a cleared batch cell toggles it back to original value', async () => {
         const api = await createGrid();
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
@@ -351,7 +351,7 @@ describe('Cell Editing: single-cell batch styles', () => {
         expect(cellA0ClearedAgain).toHaveClass(/ag-cell-batch-edit/);
     });
 
-    test('range delete applies batch edit styles to cleared cells', async () => {
+    test('range Delete applies batch edit styles to cleared cells', async () => {
         const api = await rangeGridMgr.createGridAndWait('rangeBatchStyle', {
             cellSelection: true,
             defaultColDef: { editable: true },
@@ -493,7 +493,7 @@ describe('Cell Editing: single-cell batch styles', () => {
         expect(rowData[1].b).toBe('B1');
     });
 
-    test('range delete cancel reverts cleared cells and removes styles', async () => {
+    test('range Delete cancel reverts cleared cells and removes styles', async () => {
         const api = await rangeGridMgr.createGridAndWait('rangeBatchCancel', {
             cellSelection: true,
             defaultColDef: { editable: true },

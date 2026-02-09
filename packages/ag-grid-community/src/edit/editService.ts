@@ -415,7 +415,11 @@ export class EditService extends BeanStub implements NamedBean {
         const shouldCommit = !willCancel && (!this.batch || commit);
         const editsToDelete = shouldCommit ? this.processEdits(freshEdits, source) : null;
 
-        this.strategy?.stop(cancel, event, commit, context.forceCancel ?? false);
+        if (cancel) {
+            this.strategy?.stopCancelled(commit, context.forceCancel ?? false);
+        } else {
+            this.strategy?.stopCommitted(event, commit);
+        }
 
         this.clearValidationIfNoOpenEditors();
 
@@ -1021,8 +1025,6 @@ export class EditService extends BeanStub implements NamedBean {
                 ) {
                     beans.editModelSvc?.removeEdits(position);
                     this.bulkRefresh(position);
-                    _getCellCtrl(beans, position)?.refreshCell(FORCE_REFRESH);
-                    beans.rowRenderer.refreshRows({ suppressFlash: true, force: true });
                     return true;
                 }
 

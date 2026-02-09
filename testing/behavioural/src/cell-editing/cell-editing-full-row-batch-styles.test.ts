@@ -181,7 +181,7 @@ describe('Cell Editing: full-row batch styles', () => {
         expect(row0).not.toHaveClass(/ag-row-batch-edit/);
     });
 
-    test('editing cell back to original value removes cell style; re-changing re-applies it', async () => {
+    test('editing cell back to original value removes cell style, re-changing re-applies it', async () => {
         const api = await createGrid();
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
@@ -391,7 +391,7 @@ describe('Cell Editing: full-row batch styles', () => {
         expect(row0).toHaveClass(/ag-row-batch-edit/);
     });
 
-    test('pressing Escape cancels current row edit without affecting previously edited rows', async () => {
+    test('Escape cancels current row edit without affecting previously edited rows', async () => {
         const api = await createGrid();
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
@@ -443,7 +443,7 @@ describe('Cell Editing: full-row batch styles', () => {
         expect(row0Still).toHaveClass(/ag-row-batch-edit/);
     });
 
-    test('pressing Escape on a re-edited batch row preserves the previous batch values', async () => {
+    test('Escape on a re-edited batch row preserves the previous batch values', async () => {
         const api = await createGrid();
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
@@ -546,7 +546,7 @@ describe('Cell Editing: full-row batch styles', () => {
         expect(row0).not.toHaveClass(/ag-row-batch-edit/);
     });
 
-    test('Delete toggles a cleared batch cell back to its original value in full-row mode', async () => {
+    test('Delete on a cleared batch cell toggles it back to original value', async () => {
         const api = await createGrid();
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
@@ -590,7 +590,7 @@ describe('Cell Editing: full-row batch styles', () => {
         const row0 = cellA0Restored.closest('[row-index="0"]');
         expect(row0).not.toHaveClass(/ag-row-batch-edit/);
     });
-x§
+
     test('commitBatchEdit removes cell and row styles and persists values', async () => {
         const api = await createGrid();
         const gridDiv = getGridElement(api)! as HTMLElement;
@@ -731,7 +731,7 @@ x§
         expect(rowData[1].b).toBe('B1');
     });
 
-    test('range delete applies batch edit styles in full-row mode', async () => {
+    test('range Delete applies batch edit styles', async () => {
         const api = await rangeGridMgr.createGridAndWait('fullRowRangeBatch', {
             editType: 'fullRow',
             cellSelection: true,
@@ -778,7 +778,7 @@ x§
         expect(cellA0After).not.toHaveClass(/ag-cell-batch-edit/);
     });
 
-    test('range delete cancel reverts data and removes styles in full-row mode', async () => {
+    test('range Delete cancel reverts data and removes styles', async () => {
         const api = await rangeGridMgr.createGridAndWait('fullRowRangeCancel', {
             editType: 'fullRow',
             cellSelection: true,

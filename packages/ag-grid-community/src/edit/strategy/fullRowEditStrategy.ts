@@ -120,43 +120,54 @@ export class FullRowEditStrategy extends BaseEditStrategy {
         };
     }
 
-    public override stop(cancel: boolean, event: Event | null, commit: boolean, forceCancel: boolean = false): boolean {
+    public override stopCancelled(commit: boolean, forceCancel: boolean): boolean {
+        const { rowNode } = this;
+        if (rowNode && !this.model.hasRowEdits(rowNode)) {
+            return false;
+        }
+
+        _populateModelValidationErrors(this.beans);
+
+        super.stopCancelled(commit, forceCancel);
+
+        this.cleanupEditors({ rowNode }, true);
+        this.rowNode = undefined;
+
+        return true;
+    }
+
+    public override stopCommitted(event: Event | null, commit: boolean): boolean {
         const { rowNode } = this;
         if (rowNode && !this.model.hasRowEdits(rowNode)) {
             return false;
         }
 
         const changedRows: IRowNode[] = [];
-        if (!cancel) {
-            this.model.getEditMap().forEach((rowEdits, rowNode) => {
-                if (!rowEdits || rowEdits.size === 0) {
-                    return;
-                }
+        this.model.getEditMap().forEach((rowEdits, rowNode) => {
+            if (!rowEdits || rowEdits.size === 0) {
+                return;
+            }
 
-                for (const edit of rowEdits.values()) {
-                    if (_sourceAndPendingDiffer(edit)) {
-                        changedRows.push(rowNode);
-                        // early return, we only need to know if there are any edits
-                        break;
-                    }
+            for (const edit of rowEdits.values()) {
+                if (_sourceAndPendingDiffer(edit)) {
+                    changedRows.push(rowNode);
+                    break;
                 }
-            });
-        }
+            }
+        });
 
-        // rerun validation, new values might have triggered row validations
         _populateModelValidationErrors(this.beans);
-        if (!cancel && this.editSvc?.checkNavWithValidation({ rowNode }) === 'block-stop') {
+        if (this.editSvc.checkNavWithValidation({ rowNode }) === 'block-stop') {
             return false;
         }
 
-        super.stop(cancel, event, commit, forceCancel);
+        super.stopCommitted(event, commit);
 
         for (const rowNode of changedRows) {
             this.dispatchRowEvent({ rowNode }, 'rowValueChanged');
         }
 
         this.cleanupEditors({ rowNode }, true);
-
         this.rowNode = undefined;
 
         return true;

@@ -127,64 +127,58 @@ export abstract class BaseEditStrategy extends BeanStub {
         preventNavigation?: boolean
     ): boolean | null;
 
-    public stop(cancel: boolean, event: Event | null, commit: boolean, forceCancel: boolean = false): boolean {
+    public stopCancelled(commit: boolean, forceCancel: boolean): boolean {
         const editingCells = this.model.getEditPositions();
+        // In batch mode, user Escape preserves previous pending values.
+        // cancelBatchEdit (forceCancel) fully reverts all edits.
+        const preserveBatch = this.editSvc.isBatchEditing() && !commit && !forceCancel;
+        for (const cell of editingCells) {
+            _destroyEditor(this.beans, cell, { cancel: true });
+            if (preserveBatch) {
+                this.model.purgeUnedited(cell, true);
+            } else {
+                this.model.stop(cell);
+            }
+        }
+        return true;
+    }
 
+    public stopCommitted(event: Event | null, commit: boolean): boolean {
+        const editingCells = this.model.getEditPositions();
+        const results = this.validateEditingCells(editingCells);
+        const actions = this.processValidationResults(results);
+        const preserveBatch = this.editSvc.isBatchEditing() && !commit;
+
+        for (const cell of actions.destroy) {
+            _destroyEditor(this.beans, cell, { event });
+            if (preserveBatch) {
+                this.model.purgeUnedited(cell);
+            } else {
+                this.model.stop(cell);
+            }
+        }
+
+        for (const cell of actions.keep) {
+            const cellCtrl = _getCellCtrl(this.beans, cell);
+            if (!this.editSvc.cellEditingInvalidCommitBlocks() && cellCtrl) {
+                this.editSvc.revertSingleCellEdit(cellCtrl);
+            }
+        }
+        return true;
+    }
+
+    private validateEditingCells(editingCells: Required<EditPosition>[]): EditValidationResult {
         const results: EditValidationResult = { all: [], pass: [], fail: [] };
-
         for (const cell of editingCells) {
             results.all.push(cell);
-
             const validation = this.model.getCellValidationModel().getCellValidation(cell);
-            // check if the cell is valid
-
             if ((validation?.errorMessages?.length ?? 0) > 0) {
                 results.fail.push(cell);
-                continue;
-            }
-
-            results.pass.push(cell);
-        }
-
-        if (cancel) {
-            // In batch mode, Escape on a cell/row should preserve previous batch pending values.
-            // forceCancel distinguishes cancelBatchEdit (clears all) from user Escape (preserves).
-            const preserveBatch = this.editSvc!.isBatchEditing() && !commit && !forceCancel;
-            for (const cell of editingCells) {
-                _destroyEditor(this.beans, cell, { cancel });
-                if (preserveBatch) {
-                    this.model.purgeUnedited(cell, true);
-                } else {
-                    this.model.stop(cell);
-                }
-            }
-        } else {
-            const actions = this.processValidationResults(results);
-            const preserveBatch = this.editSvc!.isBatchEditing() && !commit;
-
-            if (actions.destroy.length > 0) {
-                for (const cell of actions.destroy) {
-                    _destroyEditor(this.beans, cell, { event, cancel });
-                    if (preserveBatch) {
-                        this.model.purgeUnedited(cell);
-                    } else {
-                        this.model.stop(cell);
-                    }
-                }
-            }
-
-            if (actions.keep.length > 0) {
-                for (const cell of actions.keep) {
-                    const cellCtrl = _getCellCtrl(this.beans, cell);
-                    const editSvc = this.editSvc;
-                    if (!editSvc?.cellEditingInvalidCommitBlocks() && cellCtrl) {
-                        editSvc.revertSingleCellEdit(cellCtrl);
-                    }
-                }
+            } else {
+                results.pass.push(cell);
             }
         }
-
-        return true;
+        return results;
     }
 
     protected abstract processValidationResults(results: EditValidationResult): EditValidationAction;
