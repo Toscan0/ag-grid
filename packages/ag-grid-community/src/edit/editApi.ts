@@ -82,7 +82,7 @@ export function stopEditing(beans: BeanCollection, cancel: boolean = false): voi
 
 export function isEditing(beans: BeanCollection, cellPosition: CellPosition): boolean {
     const cellCtrl = _getCellCtrl(beans, cellPosition);
-    return beans.editSvc?.isEditing(cellCtrl) ?? false;
+    return !!beans.editSvc?.isEditing(cellCtrl);
 }
 
 export function startEditingCell(beans: BeanCollection, params: StartEditingCellParams): void {

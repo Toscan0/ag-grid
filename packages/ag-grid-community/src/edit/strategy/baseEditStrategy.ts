@@ -127,35 +127,32 @@ export abstract class BaseEditStrategy extends BeanStub {
         preventNavigation?: boolean
     ): boolean | null;
 
-    public stopCancelled(commit: boolean, forceCancel: boolean): boolean {
-        const editingCells = this.model.getEditPositions();
-        // In batch mode, user Escape preserves previous pending values.
-        // cancelBatchEdit (forceCancel) fully reverts all edits.
-        const preserveBatch = this.editSvc.isBatchEditing() && !commit && !forceCancel;
-        for (const cell of editingCells) {
+    public stopCancelled(forceCancel: boolean): boolean {
+        const preserveBatch = this.editSvc.isBatchEditing() && !forceCancel;
+        for (const cell of this.model.getEditPositions()) {
             _destroyEditor(this.beans, cell, { cancel: true });
-            if (preserveBatch) {
-                this.model.purgeUnedited(cell, true);
-            } else {
-                this.model.stop(cell);
-            }
+            this.model.stop(cell, preserveBatch, true);
         }
         return true;
     }
 
     public stopCommitted(event: Event | null, commit: boolean): boolean {
         const editingCells = this.model.getEditPositions();
-        const results = this.validateEditingCells(editingCells);
+        const results: EditValidationResult = { all: [], pass: [], fail: [] };
+        for (const cell of editingCells) {
+            results.all.push(cell);
+            if ((this.model.getCellValidationModel().getCellValidation(cell)?.errorMessages?.length ?? 0) > 0) {
+                results.fail.push(cell);
+            } else {
+                results.pass.push(cell);
+            }
+        }
         const actions = this.processValidationResults(results);
         const preserveBatch = this.editSvc.isBatchEditing() && !commit;
 
         for (const cell of actions.destroy) {
             _destroyEditor(this.beans, cell, { event });
-            if (preserveBatch) {
-                this.model.purgeUnedited(cell);
-            } else {
-                this.model.stop(cell);
-            }
+            this.model.stop(cell, preserveBatch, false);
         }
 
         for (const cell of actions.keep) {
@@ -165,20 +162,6 @@ export abstract class BaseEditStrategy extends BeanStub {
             }
         }
         return true;
-    }
-
-    private validateEditingCells(editingCells: Required<EditPosition>[]): EditValidationResult {
-        const results: EditValidationResult = { all: [], pass: [], fail: [] };
-        for (const cell of editingCells) {
-            results.all.push(cell);
-            const validation = this.model.getCellValidationModel().getCellValidation(cell);
-            if ((validation?.errorMessages?.length ?? 0) > 0) {
-                results.fail.push(cell);
-            } else {
-                results.pass.push(cell);
-            }
-        }
-        return results;
     }
 
     protected abstract processValidationResults(results: EditValidationResult): EditValidationAction;

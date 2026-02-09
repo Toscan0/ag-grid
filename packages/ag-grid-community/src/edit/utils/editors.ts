@@ -263,7 +263,7 @@ function _createEditorParams(
         rowIndex,
         node: rowNode,
         data: rowNode.data,
-        cellStartedEdit: cellStartedEdit ?? false,
+        cellStartedEdit: !!cellStartedEdit,
         onKeyDown: cellCtrl?.onKeyDown.bind(cellCtrl),
         stopEditing: (suppressNavigateAfterEdit: boolean) => {
             editSvc!.stopEditing(position, { source: batchEdit ? 'ui' : 'api', suppressNavigateAfterEdit });

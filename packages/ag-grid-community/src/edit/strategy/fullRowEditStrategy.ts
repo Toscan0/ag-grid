@@ -120,15 +120,13 @@ export class FullRowEditStrategy extends BaseEditStrategy {
         };
     }
 
-    public override stopCancelled(commit: boolean, forceCancel: boolean): boolean {
+    public override stopCancelled(forceCancel: boolean): boolean {
         const { rowNode } = this;
         if (rowNode && !this.model.hasRowEdits(rowNode)) {
             return false;
         }
 
-        _populateModelValidationErrors(this.beans);
-
-        super.stopCancelled(commit, forceCancel);
+        super.stopCancelled(forceCancel);
 
         this.cleanupEditors({ rowNode }, true);
         this.rowNode = undefined;

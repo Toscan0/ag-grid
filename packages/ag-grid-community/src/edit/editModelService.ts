@@ -50,22 +50,6 @@ export class EditModelService extends BeanStub implements NamedBean {
         }
     }
 
-    /**
-     * Remove a cell's edit entry if the value was never changed (still UNEDITED or equal to the source value).
-     * When cancel is true, also clears editorValue so getPendingEditValue falls through to pendingValue.
-     */
-    public purgeUnedited(cell: Required<EditPosition>, cancel?: boolean): void {
-        const edit = this.getEditRow(cell.rowNode)?.get(cell.column);
-        if (!edit) {
-            return;
-        }
-        if (edit.pendingValue === UNEDITED || edit.pendingValue === edit.sourceValue) {
-            this.removeEdits(cell);
-        } else if (cancel) {
-            edit.editorValue = undefined;
-        }
-    }
-
     public getEditRow(rowNode: IRowNode, params: GetEditsParams = {}): EditRow | undefined {
         if (this.suspendEdits) {
             return undefined;
@@ -286,7 +270,7 @@ export class EditModelService extends BeanStub implements NamedBean {
                 if (withOpenEditor) {
                     return this.getEdit(position)?.state === 'editing';
                 }
-                return rowEdits.has(column) ?? false;
+                return rowEdits.has(column);
             }
 
             if (rowEdits.size !== 0) {
@@ -324,15 +308,21 @@ export class EditModelService extends BeanStub implements NamedBean {
         this.edits.set(rowNode, map);
     }
 
-    public stop(position?: Required<EditPosition>): void {
+    public stop(position: Required<EditPosition>, preserveBatch: boolean, cancel: boolean): void {
         if (!this.hasEdits(position)) {
             return;
         }
 
-        if (position) {
-            this.removeEdits(position);
+        if (preserveBatch) {
+            // Keep edits that were actually changed; remove unchanged ones.
+            const edit = this.getEditRow(position.rowNode)?.get(position.column);
+            if (edit && (edit.pendingValue === UNEDITED || edit.pendingValue === edit.sourceValue)) {
+                this.removeEdits(position);
+            } else if (edit && cancel) {
+                edit.editorValue = undefined;
+            }
         } else {
-            this.clear();
+            this.removeEdits(position);
         }
     }
 

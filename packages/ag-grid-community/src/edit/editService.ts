@@ -57,14 +57,14 @@ import { _refreshEditCells } from './utils/refresh';
 type BatchPrepDetails = { compDetails?: UserCompDetails; valueToDisplay?: any };
 
 type StopContext = {
-    cancel?: boolean;
-    cellCtrl?: CellCtrl;
+    cancel: boolean;
+    cellCtrl: CellCtrl | undefined;
     commit: boolean;
     edits: EditMap;
-    event?: KeyboardEvent | MouseEvent | null;
-    forceCancel?: boolean;
-    forceStop?: boolean;
-    position?: EditPosition;
+    event: KeyboardEvent | MouseEvent | null;
+    forceCancel: boolean;
+    forceStop: boolean;
+    position: EditPosition | undefined;
     source: EditSource;
     treatAsSource: EditSource;
     willCancel: boolean;
@@ -237,7 +237,7 @@ export class EditService extends BeanStub implements NamedBean {
     }
 
     public isRowEditing(rowNode?: IRowNode, params?: IsEditingParams): boolean {
-        return (rowNode && this.model.hasRowEdits(rowNode, params)) ?? false;
+        return !!rowNode && this.model.hasRowEdits(rowNode, params);
     }
 
     public enableRangeSelectionWhileEditing(): void {
@@ -333,7 +333,14 @@ export class EditService extends BeanStub implements NamedBean {
     }
 
     private prepareStopContext(position?: EditPosition, params?: StopEditParams): StopContext | null {
-        const { event, cancel, source = 'ui', forceCancel, forceStop, commit = false } = params || {};
+        const {
+            event = null,
+            cancel = false,
+            source = 'ui',
+            forceCancel = false,
+            forceStop = false,
+            commit = false,
+        } = params || {};
 
         if (STOP_EDIT_SOURCE_TRANSFORM_KEYS.has(source) && this.batch) {
             // if we are in batch editing, we do not stop editing on paste
@@ -358,15 +365,14 @@ export class EditService extends BeanStub implements NamedBean {
             (!cancel &&
                 (!!this.shouldStopEditing(position, event, treatAsSource) ||
                     ((this.committing || source === 'paste') && !this.batch))) ||
-            (forceStop ?? false);
-        const willCancel =
-            (cancel && !!this.shouldCancelEditing(position, event, treatAsSource)) || (forceCancel ?? false);
+            forceStop;
+        const willCancel = (cancel && !!this.shouldCancelEditing(position, event, treatAsSource)) || forceCancel;
 
         return {
             cancel,
-            cellCtrl: cellCtrl ?? undefined,
+            cellCtrl,
             edits: this.model.getEditMap(true),
-            event,
+            event: event ?? null,
             forceCancel,
             forceStop,
             commit,
@@ -403,12 +409,11 @@ export class EditService extends BeanStub implements NamedBean {
 
     private handleStopOrCancel(context: StopContext): StopOutcome {
         const { beans, model } = this;
-        const { cancel = false, commit, edits, event = null, source, forceCancel, willCancel, willStop } = context;
+        const { cancel, commit, edits, event, source, forceCancel, willCancel, willStop } = context;
 
-        // In batch mode, a per-cell/row cancel (Escape) should not persist editor values
-        // so that the previous batch pending value is preserved.
-        // A batch-wide cancel (forceCancel, e.g. cancelBatchEdit) should persist before discarding.
-        const persist = !(this.batch && willCancel && !forceCancel);
+        // In batch per-cell cancel (Escape), don't persist so previous pending value is preserved.
+        // A batch-wide cancel (forceCancel, e.g. cancelBatchEdit) persists before discarding.
+        const persist = !this.batch || !willCancel || forceCancel;
         _syncFromEditors(beans, { persist, isCancelling: willCancel || cancel, isStopping: willStop });
 
         const freshEdits = model.getEditMap();
@@ -416,7 +421,7 @@ export class EditService extends BeanStub implements NamedBean {
         const editsToDelete = shouldCommit ? this.processEdits(freshEdits, source) : null;
 
         if (cancel) {
-            this.strategy?.stopCancelled(commit, context.forceCancel ?? false);
+            this.strategy?.stopCancelled(context.forceCancel);
         } else {
             this.strategy?.stopCommitted(event, commit);
         }
@@ -468,12 +473,10 @@ export class EditService extends BeanStub implements NamedBean {
                 _syncFromEditors(beans, { persist: true });
             } else if (isEscape) {
                 if (this.batch) {
-                    // In batch mode, Escape reverts to the previous batch pending value,
-                    // not to the original source value. Destroy editor, clear editorValue,
-                    // and only remove entries that were never actually changed.
+                    // In batch mode, Escape reverts to previous pending value, not source value.
                     const pos = cellCtrl! as Required<EditPosition>;
                     _destroyEditors(beans, [pos], { silent: true });
-                    this.model.purgeUnedited(pos, true);
+                    this.model.stop(pos, true, true);
                     _getCellCtrl(beans, pos)?.refreshCell(FORCE_REFRESH);
                 } else {
                     this.revertSingleCellEdit(cellCtrl!);
@@ -505,7 +508,7 @@ export class EditService extends BeanStub implements NamedBean {
         commit,
         willCancel,
         willStop,
-    }: StopContext & { params?: StopEditParams; position?: EditPosition; res: boolean }): void {
+    }: StopContext & { params?: StopEditParams; res: boolean }): void {
         const beans = this.beans;
         if (res && position) {
             if (!this.batch || commit) {
@@ -1015,8 +1018,7 @@ export class EditService extends BeanStub implements NamedBean {
 
             const existing = this.model.getEdit(position);
             if (existing) {
-                // In batch mode, cellClear on a cell already cleared to an empty value
-                // toggles it back to its original value instead of no-oping.
+                // In batch mode, cellClear on an already-cleared cell toggles back to original.
                 if (
                     batch &&
                     eventSource === 'cellClear' &&
