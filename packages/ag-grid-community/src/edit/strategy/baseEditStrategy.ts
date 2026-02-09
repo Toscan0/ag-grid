@@ -127,7 +127,7 @@ export abstract class BaseEditStrategy extends BeanStub {
         preventNavigation?: boolean
     ): boolean | null;
 
-    public stop(cancel?: boolean, event?: Event | null): boolean {
+    public stop(cancel: boolean, event: Event | null, commit: boolean, forceCancel: boolean = false): boolean {
         const editingCells = this.model.getEditPositions();
 
         const results: EditValidationResult = { all: [], pass: [], fail: [] };
@@ -147,17 +147,29 @@ export abstract class BaseEditStrategy extends BeanStub {
         }
 
         if (cancel) {
+            // In batch mode, Escape on a cell/row should preserve previous batch pending values.
+            // forceCancel distinguishes cancelBatchEdit (clears all) from user Escape (preserves).
+            const preserveBatch = this.editSvc!.isBatchEditing() && !commit && !forceCancel;
             for (const cell of editingCells) {
                 _destroyEditor(this.beans, cell, { cancel });
-                this.model.stop(cell);
+                if (preserveBatch) {
+                    this.model.purgeUnedited(cell, true);
+                } else {
+                    this.model.stop(cell);
+                }
             }
         } else {
             const actions = this.processValidationResults(results);
+            const preserveBatch = this.editSvc!.isBatchEditing() && !commit;
 
             if (actions.destroy.length > 0) {
                 for (const cell of actions.destroy) {
                     _destroyEditor(this.beans, cell, { event, cancel });
-                    this.model.stop(cell);
+                    if (preserveBatch) {
+                        this.model.purgeUnedited(cell);
+                    } else {
+                        this.model.stop(cell);
+                    }
                 }
             }
 

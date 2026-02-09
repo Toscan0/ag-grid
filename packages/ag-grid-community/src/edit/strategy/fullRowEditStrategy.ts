@@ -120,7 +120,7 @@ export class FullRowEditStrategy extends BaseEditStrategy {
         };
     }
 
-    public override stop(cancel?: boolean, event?: Event | null): boolean {
+    public override stop(cancel: boolean, event: Event | null, commit: boolean, forceCancel: boolean = false): boolean {
         const { rowNode } = this;
         if (rowNode && !this.model.hasRowEdits(rowNode)) {
             return false;
@@ -149,7 +149,7 @@ export class FullRowEditStrategy extends BaseEditStrategy {
             return false;
         }
 
-        super.stop(cancel, event);
+        super.stop(cancel, event, commit, forceCancel);
 
         for (const rowNode of changedRows) {
             this.dispatchRowEvent({ rowNode }, 'rowValueChanged');

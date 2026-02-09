@@ -96,8 +96,8 @@ export class SingleCellEditStrategy extends BaseEditStrategy {
         };
     }
 
-    public override stop(cancel?: boolean, event?: Event | null): boolean {
-        super.stop(cancel, event);
+    public override stop(cancel: boolean, event: Event | null, commit: boolean, forceCancel: boolean = false): boolean {
+        super.stop(cancel, event, commit, forceCancel);
 
         this.rowNode = undefined;
         this.column = undefined;

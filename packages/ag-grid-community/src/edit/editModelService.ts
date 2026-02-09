@@ -50,6 +50,22 @@ export class EditModelService extends BeanStub implements NamedBean {
         }
     }
 
+    /**
+     * Remove a cell's edit entry if the value was never changed (still UNEDITED or equal to the source value).
+     * When cancel is true, also clears editorValue so getPendingEditValue falls through to pendingValue.
+     */
+    public purgeUnedited(cell: Required<EditPosition>, cancel?: boolean): void {
+        const edit = this.getEditRow(cell.rowNode)?.get(cell.column);
+        if (!edit) {
+            return;
+        }
+        if (edit.pendingValue === UNEDITED || edit.pendingValue === edit.sourceValue) {
+            this.removeEdits(cell);
+        } else if (cancel) {
+            edit.editorValue = undefined;
+        }
+    }
+
     public getEditRow(rowNode: IRowNode, params: GetEditsParams = {}): EditRow | undefined {
         if (this.suspendEdits) {
             return undefined;

@@ -59,6 +59,7 @@ type BatchPrepDetails = { compDetails?: UserCompDetails; valueToDisplay?: any };
 type StopContext = {
     cancel?: boolean;
     cellCtrl?: CellCtrl;
+    commit: boolean;
     edits: EditMap;
     event?: KeyboardEvent | MouseEvent | null;
     forceCancel?: boolean;
@@ -332,7 +333,7 @@ export class EditService extends BeanStub implements NamedBean {
     }
 
     private prepareStopContext(position?: EditPosition, params?: StopEditParams): StopContext | null {
-        const { event, cancel, source = 'ui', forceCancel, forceStop } = params || {};
+        const { event, cancel, source = 'ui', forceCancel, forceStop, commit = false } = params || {};
 
         if (STOP_EDIT_SOURCE_TRANSFORM_KEYS.has(source) && this.batch) {
             // if we are in batch editing, we do not stop editing on paste
@@ -368,6 +369,7 @@ export class EditService extends BeanStub implements NamedBean {
             event,
             forceCancel,
             forceStop,
+            commit,
             position,
             source,
             treatAsSource,
@@ -401,20 +403,27 @@ export class EditService extends BeanStub implements NamedBean {
 
     private handleStopOrCancel(context: StopContext): StopOutcome {
         const { beans, model } = this;
-        const { cancel, edits, event, source, willCancel, willStop } = context;
+        const { cancel = false, commit, edits, event = null, source, forceCancel, willCancel, willStop } = context;
 
-        _syncFromEditors(beans, { persist: true, isCancelling: willCancel || cancel, isStopping: willStop });
+        // In batch mode, a per-cell/row cancel (Escape) should not persist editor values
+        // so that the previous batch pending value is preserved.
+        // A batch-wide cancel (forceCancel, e.g. cancelBatchEdit) should persist before discarding.
+        const persist = !(this.batch && willCancel && !forceCancel);
+        _syncFromEditors(beans, { persist, isCancelling: willCancel || cancel, isStopping: willStop });
 
         const freshEdits = model.getEditMap();
-        const editsToDelete = this.processEdits(freshEdits, cancel, source);
+        const shouldCommit = !willCancel && (!this.batch || commit);
+        const editsToDelete = shouldCommit ? this.processEdits(freshEdits, source) : null;
 
-        this.strategy?.stop(cancel, event);
+        this.strategy?.stop(cancel, event, commit, context.forceCancel ?? false);
 
         this.clearValidationIfNoOpenEditors();
 
-        // clear any dangling edits, after editor destruction
-        for (const position of editsToDelete) {
-            model.clearEditValue(position);
+        if (editsToDelete) {
+            // clear any dangling edits, after editor destruction
+            for (const position of editsToDelete) {
+                model.clearEditValue(position);
+            }
         }
 
         this.bulkRefresh(undefined, edits);
@@ -454,8 +463,17 @@ export class EditService extends BeanStub implements NamedBean {
             if (isEnter || isTab) {
                 _syncFromEditors(beans, { persist: true });
             } else if (isEscape) {
-                // only if ESC is pressed while in the editor for this cell
-                this.revertSingleCellEdit(cellCtrl!);
+                if (this.batch) {
+                    // In batch mode, Escape reverts to the previous batch pending value,
+                    // not to the original source value. Destroy editor, clear editorValue,
+                    // and only remove entries that were never actually changed.
+                    const pos = cellCtrl! as Required<EditPosition>;
+                    _destroyEditors(beans, [pos], { silent: true });
+                    this.model.purgeUnedited(pos, true);
+                    _getCellCtrl(beans, pos)?.refreshCell(FORCE_REFRESH);
+                } else {
+                    this.revertSingleCellEdit(cellCtrl!);
+                }
             }
 
             if (this.batch) {
@@ -480,12 +498,15 @@ export class EditService extends BeanStub implements NamedBean {
         params,
         position,
         res,
+        commit,
         willCancel,
         willStop,
     }: StopContext & { params?: StopEditParams; position?: EditPosition; res: boolean }): void {
         const beans = this.beans;
         if (res && position) {
-            this.model.removeEdits(position);
+            if (!this.batch || commit) {
+                this.model.removeEdits(position);
+            }
         }
 
         // Suppress navigation is required for bulk activities like pasting or fill handle via setDataValue,
@@ -551,12 +572,16 @@ export class EditService extends BeanStub implements NamedBean {
         this.beans.navigation?.navigateToNextCell(null, direction, cellPosition, false);
     }
 
-    private processEdits(edits: EditMap, cancel: boolean = false, source: EditSource): EditPosition[] {
+    private processEdits(edits: EditMap, source: EditSource): EditPosition[] | null {
         const rowNodes = Array.from(edits.keys());
 
         const hasValidationErrors =
             this.model.getCellValidationModel().getCellValidationMap().size > 0 ||
             this.model.getRowValidationModel().getRowValidationMap().size > 0;
+
+        if (hasValidationErrors) {
+            return null;
+        }
 
         const editsToDelete: EditPosition[] = [];
 
@@ -565,9 +590,8 @@ export class EditService extends BeanStub implements NamedBean {
             for (const column of editRow.keys()) {
                 const editValue = editRow.get(column)!;
                 const position: Required<EditPosition> = { rowNode, column };
-                const valueChanged = _sourceAndPendingDiffer(editValue);
 
-                if (!cancel && valueChanged && !hasValidationErrors) {
+                if (_sourceAndPendingDiffer(editValue)) {
                     const cellCtrl = _getCellCtrl(this.beans, position);
                     const success = this.setNodeDataValue(rowNode, column, editValue.pendingValue, cellCtrl, source);
                     if (!success) {
@@ -987,6 +1011,21 @@ export class EditService extends BeanStub implements NamedBean {
 
             const existing = this.model.getEdit(position);
             if (existing) {
+                // In batch mode, cellClear on a cell already cleared to an empty value
+                // toggles it back to its original value instead of no-oping.
+                if (
+                    batch &&
+                    eventSource === 'cellClear' &&
+                    existing.pendingValue !== existing.sourceValue &&
+                    (existing.pendingValue == null || existing.pendingValue === '')
+                ) {
+                    beans.editModelSvc?.removeEdits(position);
+                    this.bulkRefresh(position);
+                    _getCellCtrl(beans, position)?.refreshCell(FORCE_REFRESH);
+                    beans.rowRenderer.refreshRows({ suppressFlash: true, force: true });
+                    return true;
+                }
+
                 if (existing.pendingValue === newValue) {
                     return false;
                 }
