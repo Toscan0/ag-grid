@@ -959,6 +959,26 @@ export class EditService extends BeanStub implements NamedBean {
         return new PopupEditorWrapper(params);
     }
 
+    /**
+     * In batch mode, a second cellClear (Delete) on an already-cleared cell should toggle back
+     * to the original value and remove the pending edit.
+     * Compares the pending value against `getDeleteValue` treating null and '' as equivalent.
+     */
+    private tryToggleBackCellClear(position: Required<EditPosition>, existing: EditValue): boolean {
+        const deleteValue = this.beans.valueSvc.getDeleteValue(position.column as AgColumn, position.rowNode);
+        const pending = existing.pendingValue;
+        const isDelete =
+            pending === deleteValue ||
+            ((pending == null || pending === '') && (deleteValue == null || deleteValue === ''));
+        if (!isDelete || existing.pendingValue === existing.sourceValue) {
+            return false;
+        }
+        this.dispatchEditValuesChanged(position, { ...existing, pendingValue: existing.sourceValue });
+        this.beans.editModelSvc?.removeEdits(position);
+        this.bulkRefresh(position);
+        return true;
+    }
+
     public setDataValue(position: Required<EditPosition>, newValue: any, eventSource?: string): boolean | undefined {
         try {
             const batch = this.batch;
@@ -1018,16 +1038,11 @@ export class EditService extends BeanStub implements NamedBean {
 
             const existing = this.model.getEdit(position);
             if (existing) {
-                // In batch mode, cellClear on an already-cleared cell toggles back to original.
-                if (
-                    batch &&
-                    eventSource === 'cellClear' &&
-                    existing.pendingValue !== existing.sourceValue &&
-                    (existing.pendingValue == null || existing.pendingValue === '')
-                ) {
-                    beans.editModelSvc?.removeEdits(position);
-                    this.bulkRefresh(position);
-                    return true;
+                // In batch mode, a second cellClear on an already-cleared cell toggles back to original.
+                if (batch && eventSource === 'cellClear') {
+                    if (this.tryToggleBackCellClear(position, existing)) {
+                        return true;
+                    }
                 }
 
                 if (existing.pendingValue === newValue) {

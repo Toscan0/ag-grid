@@ -5,7 +5,7 @@ import { userEvent } from '@testing-library/user-event';
 import { TextEditorModule, agTestIdFor, getGridElement, setupAgTestIds } from 'ag-grid-community';
 import { BatchEditModule, CellSelectionModule } from 'ag-grid-enterprise';
 
-import { TestGridsManager, asyncSetTimeout, waitForInput } from '../test-utils';
+import { EditEventTracker, TestGridsManager, asyncSetTimeout, waitForInput } from '../test-utils';
 
 describe('Cell Editing: single-cell batch styles', () => {
     const gridMgr = new TestGridsManager({
@@ -46,6 +46,7 @@ describe('Cell Editing: single-cell batch styles', () => {
 
     test('edited cell retains batch edit style after editing another cell', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -63,28 +64,56 @@ describe('Cell Editing: single-cell batch styles', () => {
         await user.keyboard('{Enter}');
         await asyncSetTimeout(0);
 
-        // Cell should have batch edit style
+        // Cell A should have batch edit style
         const cellA0After = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'a'));
         expect(cellA0After).toHaveTextContent('CHANGED');
         expect(cellA0After).toHaveClass(/ag-cell-batch-edit/);
 
-        // An unchanged cell in the same row should NOT have batch edit style
+        // Now edit a second cell (0, b)
         const cellB0 = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'b'));
-        expect(cellB0).not.toHaveClass(/ag-cell-batch-edit/);
+        await user.dblClick(cellB0);
+        const inputB0 = await waitForInput(gridDiv, cellB0);
+        await user.clear(inputB0);
+        await user.type(inputB0, 'ALSO_CHANGED');
+        await user.keyboard('{Enter}');
+        await asyncSetTimeout(0);
+
+        // Cell A should still have batch edit style after editing another cell
+        const cellA0Still = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'a'));
+        expect(cellA0Still).toHaveTextContent('CHANGED');
+        expect(cellA0Still).toHaveClass(/ag-cell-batch-edit/);
+
+        // Cell B should also have batch edit style
+        const cellB0After = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'b'));
+        expect(cellB0After).toHaveTextContent('ALSO_CHANGED');
+        expect(cellB0After).toHaveClass(/ag-cell-batch-edit/);
 
         // Note: ag-row-batch-edit is only applied in fullRow edit mode,
         // so we only check cell-level styles here.
 
-        // After commit, styles should be removed
+        // After commit, styles should be removed from both cells
         api.commitBatchEdit();
         await asyncSetTimeout(0);
 
         const cellA0Final = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'a'));
         expect(cellA0Final).not.toHaveClass(/ag-cell-batch-edit/);
+        const cellB0Final = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'b'));
+        expect(cellB0Final).not.toHaveClass(/ag-cell-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 2,
+            cellEditingStopped: 6,
+            cellValueChanged: 2,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('multiple cells across rows retain batch edit styles', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -119,10 +148,21 @@ describe('Cell Editing: single-cell batch styles', () => {
         expect(cellA1After).toHaveClass(/ag-cell-batch-edit/);
 
         // Note: ag-row-batch-edit is only applied in fullRow edit mode
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 2,
+            cellEditingStopped: 4,
+            cellValueChanged: 0,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('cancel removes batch edit styles and reverts data', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -150,10 +190,21 @@ describe('Cell Editing: single-cell batch styles', () => {
         const cellA0After = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'a'));
         expect(cellA0After).not.toHaveClass(/ag-cell-batch-edit/);
         expect(cellA0After).toHaveTextContent('A0');
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 1,
+            cellEditingStopped: 2,
+            cellValueChanged: 0,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('editing back to original value removes style, re-changing re-applies it', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -199,10 +250,21 @@ describe('Cell Editing: single-cell batch styles', () => {
         cellA0After = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'a'));
         expect(cellA0After).toHaveTextContent('CHANGED_AGAIN');
         expect(cellA0After).toHaveClass(/ag-cell-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 3,
+            cellEditingStopped: 3,
+            cellValueChanged: 0,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('Escape cancels current cell edit without affecting other batch edits', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -241,10 +303,21 @@ describe('Cell Editing: single-cell batch styles', () => {
         const cellA0Still = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'a'));
         expect(cellA0Still).toHaveTextContent('CONFIRMED');
         expect(cellA0Still).toHaveClass(/ag-cell-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 2,
+            cellEditingStopped: 3,
+            cellValueChanged: 0,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('Escape on a re-edited batch cell preserves the previous batch value', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -276,10 +349,21 @@ describe('Cell Editing: single-cell batch styles', () => {
         const cellA0Final = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'a'));
         expect(cellA0Final).toHaveTextContent('FIRST_EDIT');
         expect(cellA0Final).toHaveClass(/ag-cell-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 2,
+            cellEditingStopped: 2,
+            cellValueChanged: 0,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('clearing a batch-edited cell and typing original value removes batch style', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -313,10 +397,21 @@ describe('Cell Editing: single-cell batch styles', () => {
         const cellA0Final = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'a'));
         expect(cellA0Final).toHaveTextContent('A0');
         expect(cellA0Final).not.toHaveClass(/ag-cell-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 2,
+            cellEditingStopped: 2,
+            cellValueChanged: 0,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('Delete on a cleared batch cell toggles it back to original value', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -349,6 +444,16 @@ describe('Cell Editing: single-cell batch styles', () => {
         const cellA0ClearedAgain = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'a'));
         expect(cellA0ClearedAgain).toHaveTextContent('');
         expect(cellA0ClearedAgain).toHaveClass(/ag-cell-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 0,
+            cellEditingStopped: 0,
+            cellValueChanged: 0,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('range Delete applies batch edit styles to cleared cells', async () => {
@@ -365,6 +470,7 @@ describe('Cell Editing: single-cell batch styles', () => {
             ],
             getRowId: (params) => params.data.id,
         });
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -395,10 +501,21 @@ describe('Cell Editing: single-cell batch styles', () => {
 
         const cellA0After = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'a'));
         expect(cellA0After).not.toHaveClass(/ag-cell-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 0,
+            cellEditingStopped: 5,
+            cellValueChanged: 2,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('commitBatchEdit removes styles and persists values across multiple cells', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -443,10 +560,21 @@ describe('Cell Editing: single-cell batch styles', () => {
         const rowData = api.getGridOption('rowData')!;
         expect(rowData[0].a).toBe('COMMIT_A0');
         expect(rowData[1].b).toBe('COMMIT_B1');
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 2,
+            cellEditingStopped: 6,
+            cellValueChanged: 2,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('cancelBatchEdit removes styles and reverts values across multiple cells', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -491,6 +619,16 @@ describe('Cell Editing: single-cell batch styles', () => {
         const rowData = api.getGridOption('rowData')!;
         expect(rowData[0].a).toBe('A0');
         expect(rowData[1].b).toBe('B1');
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 2,
+            cellEditingStopped: 6,
+            cellValueChanged: 0,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('range Delete cancel reverts cleared cells and removes styles', async () => {
@@ -507,6 +645,7 @@ describe('Cell Editing: single-cell batch styles', () => {
             ],
             getRowId: (params) => params.data.id,
         });
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -535,5 +674,15 @@ describe('Cell Editing: single-cell batch styles', () => {
         const cellB1After = getByTestId(gridDiv, agTestIdFor.cell('ROW_1', 'b'));
         expect(cellB1After).not.toHaveClass(/ag-cell-batch-edit/);
         expect(cellB1After).toHaveTextContent('B1');
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 0,
+            cellEditingStopped: 14,
+            cellValueChanged: 0,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 });

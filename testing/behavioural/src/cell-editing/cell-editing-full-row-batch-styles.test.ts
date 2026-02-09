@@ -5,7 +5,7 @@ import { userEvent } from '@testing-library/user-event';
 import { TextEditorModule, agTestIdFor, getGridElement, setupAgTestIds } from 'ag-grid-community';
 import { BatchEditModule, CellSelectionModule } from 'ag-grid-enterprise';
 
-import { TestGridsManager, asyncSetTimeout, waitForInput } from '../test-utils';
+import { EditEventTracker, TestGridsManager, asyncSetTimeout, waitForInput } from '../test-utils';
 
 describe('Cell Editing: full-row batch styles', () => {
     const gridMgr = new TestGridsManager({
@@ -47,6 +47,7 @@ describe('Cell Editing: full-row batch styles', () => {
 
     test('edited row retains batch edit style after tabbing to next row', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -88,10 +89,21 @@ describe('Cell Editing: full-row batch styles', () => {
 
         const cellA0Final = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'a'));
         expect(cellA0Final).not.toHaveClass(/ag-cell-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 5,
+            cellEditingStopped: 8,
+            cellValueChanged: 1,
+            rowValueChanged: 2,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('multiple rows retain batch edit styles when editing across rows', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -140,10 +152,21 @@ describe('Cell Editing: full-row batch styles', () => {
 
         const row1 = cellA1After.closest('[row-index="1"]');
         expect(row1).toHaveClass(/ag-row-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 8,
+            cellEditingStopped: 14,
+            cellValueChanged: 0,
+            rowValueChanged: 3,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('cancel removes batch edit styles from previously edited rows', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -179,10 +202,21 @@ describe('Cell Editing: full-row batch styles', () => {
 
         const row0 = cellA0After.closest('[row-index="0"]');
         expect(row0).not.toHaveClass(/ag-row-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 5,
+            cellEditingStopped: 8,
+            cellValueChanged: 0,
+            rowValueChanged: 1,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('editing cell back to original value removes cell style, re-changing re-applies it', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -259,10 +293,21 @@ describe('Cell Editing: full-row batch styles', () => {
 
         const row0After = cellA0After.closest('[row-index="0"]');
         expect(row0After).toHaveClass(/ag-row-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 17,
+            cellEditingStopped: 21,
+            cellValueChanged: 0,
+            rowValueChanged: 3,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('row style is removed only when all edited cells in the row are reverted to original', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -389,10 +434,21 @@ describe('Cell Editing: full-row batch styles', () => {
 
         row0 = cellA0After.closest('[row-index="0"]');
         expect(row0).toHaveClass(/ag-row-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 23,
+            cellEditingStopped: 35,
+            cellValueChanged: 0,
+            rowValueChanged: 5,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('Escape cancels current row edit without affecting previously edited rows', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -441,10 +497,21 @@ describe('Cell Editing: full-row batch styles', () => {
         expect(cellA0Still).toHaveClass(/ag-cell-batch-edit/);
         const row0Still = cellA0Still.closest('[row-index="0"]');
         expect(row0Still).toHaveClass(/ag-row-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 5,
+            cellEditingStopped: 7,
+            cellValueChanged: 0,
+            rowValueChanged: 1,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('Escape on a re-edited batch row preserves the previous batch values', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -488,10 +555,21 @@ describe('Cell Editing: full-row batch styles', () => {
         expect(cellA0Final).toHaveClass(/ag-cell-batch-edit/);
         const row0 = cellA0Final.closest('[row-index="0"]');
         expect(row0).toHaveClass(/ag-row-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 8,
+            cellEditingStopped: 12,
+            cellValueChanged: 0,
+            rowValueChanged: 2,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('clearing a batch-edited cell with Backspace and typing original value removes styles', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -544,10 +622,21 @@ describe('Cell Editing: full-row batch styles', () => {
         // Row should also lose batch style (no edits remain)
         const row0 = cellA0Final.closest('[row-index="0"]');
         expect(row0).not.toHaveClass(/ag-row-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 11,
+            cellEditingStopped: 13,
+            cellValueChanged: 0,
+            rowValueChanged: 2,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('Delete on a cleared batch cell toggles it back to original value', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -589,10 +678,21 @@ describe('Cell Editing: full-row batch styles', () => {
         // Row should also lose batch style (no edits remain)
         const row0 = cellA0Restored.closest('[row-index="0"]');
         expect(row0).not.toHaveClass(/ag-row-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 5,
+            cellEditingStopped: 8,
+            cellValueChanged: 0,
+            rowValueChanged: 1,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('commitBatchEdit removes cell and row styles and persists values', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -659,10 +759,21 @@ describe('Cell Editing: full-row batch styles', () => {
         const rowData = api.getGridOption('rowData')!;
         expect(rowData[0].a).toBe('COMMIT_A0');
         expect(rowData[1].b).toBe('COMMIT_B1');
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 8,
+            cellEditingStopped: 18,
+            cellValueChanged: 2,
+            rowValueChanged: 5,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('cancelBatchEdit removes cell and row styles and reverts values', async () => {
         const api = await createGrid();
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -729,6 +840,16 @@ describe('Cell Editing: full-row batch styles', () => {
         const rowData = api.getGridOption('rowData')!;
         expect(rowData[0].a).toBe('A0');
         expect(rowData[1].b).toBe('B1');
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 8,
+            cellEditingStopped: 18,
+            cellValueChanged: 0,
+            rowValueChanged: 3,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('range Delete applies batch edit styles', async () => {
@@ -746,6 +867,7 @@ describe('Cell Editing: full-row batch styles', () => {
             ],
             getRowId: (params) => params.data.id,
         });
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -776,6 +898,16 @@ describe('Cell Editing: full-row batch styles', () => {
 
         const cellA0After = getByTestId(gridDiv, agTestIdFor.cell('ROW_0', 'a'));
         expect(cellA0After).not.toHaveClass(/ag-cell-batch-edit/);
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 0,
+            cellEditingStopped: 5,
+            cellValueChanged: 2,
+            rowValueChanged: 2,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 
     test('range Delete cancel reverts data and removes styles', async () => {
@@ -793,6 +925,7 @@ describe('Cell Editing: full-row batch styles', () => {
             ],
             getRowId: (params) => params.data.id,
         });
+        const eventTracker = new EditEventTracker(api);
         const gridDiv = getGridElement(api)! as HTMLElement;
         const user = userEvent.setup({ skipHover: true });
         await asyncSetTimeout(0);
@@ -821,5 +954,15 @@ describe('Cell Editing: full-row batch styles', () => {
         const cellB1After = getByTestId(gridDiv, agTestIdFor.cell('ROW_1', 'b'));
         expect(cellB1After).not.toHaveClass(/ag-cell-batch-edit/);
         expect(cellB1After).toHaveTextContent('B1');
+
+        expect(eventTracker.counts).toEqual({
+            cellEditingStarted: 0,
+            cellEditingStopped: 14,
+            cellValueChanged: 0,
+            rowValueChanged: 0,
+            cellEditRequest: 0,
+            bulkEditingStarted: 0,
+            bulkEditingStopped: 0,
+        });
     });
 });
